@@ -1,11 +1,15 @@
 # POC Python Realtime API o1 assistant
 > This is a proof of concept for using the OpenAI's [Realtime API](https://openai.com/index/introducing-the-realtime-api/) to chain tools, call o1-preview & o1-mini, [structure output](https://openai.com/index/introducing-structured-outputs-in-the-api/) responses, and glimpse into the future of **AI assistant powered engineering**.
 >
+> See video where we [use SQL methods and discuss AI engineering in 2025](https://youtu.be/4SnvMieJiuw)
+>
 > See video where we [use and discuss this POC](https://youtu.be/vN0t-kcPOXo)
 >
 > See video where we [add memory and tools to the assistant](https://youtu.be/090oR--s__8)
 >
-> This codebase is a v0.2, poc. It's buggy, but contains the core ideas for realtime personal ai assistants & AI Agents.
+> This codebase is a v0.3, poc. It's buggy, but contains the core ideas for realtime personal ai assistants & AI Agents.
+
+<img src="./images/ai-eng-plan-for-2025.png" alt="engineers-ai-assistant" style="max-width: 800px;">
 
 <img src="./images/engineers-ai-assistant.png" alt="engineers-ai-assistant" style="max-width: 800px;">
 
@@ -19,32 +23,40 @@
 - Run the realtime assistant `uv run main` or `uv run main --prompts "Hello, how are you?|What time is it?|Open Hacker News"`
 
 ## Assistant Tools
-The assistant is equipped with the following tools:
+> See [TOOLS.md](TOOLS.md) for a detailed list of available tools and their descriptions.
 
-### Utility Functions
-- `get_current_time`: Returns the current time.
-- `get_random_number`: Returns a random number between 1 and 100.
-- `open_browser`: Opens a browser tab with the best-fitting URL based on the user's prompt.
-- `generate_diagram`: Generates mermaid diagrams based on the user's prompt.
-- `runnable_code_check`: Checks if the code in the specified file is runnable and provides necessary changes if not.
-- `run_python`: Executes a Python script from the `scratch_pad_dir` based on the user's prompt and returns the output.
+## Personalization
 
-### Browser and File Operations
-- `create_file`: Generates content for a new file based on the user's prompt and file name.
-- `update_file`: Updates a file based on the user's prompt.
-- `delete_file`: Deletes a file based on the user's prompt.
-- `discuss_file`: Discusses a file's content based on the user's prompt, considering the current memory content.
-- `read_file_into_memory`: Reads a file from the scratch_pad_dir and saves its content into memory based on the user's prompt.
-- `read_dir_into_memory`: Reads all files from the scratch_pad_dir and saves their content into memory.
+You can customize the behavior of the assistant by modifying the `personalization.json` file. Here are the available options:
 
-### Memory Management
-- `clipboard_to_memory`: Copies the content from the clipboard to memory.
-- `add_to_memory`: Adds a key-value pair to memory.
-- `remove_variable_from_memory`: Removes a variable from memory based on the user's prompt.
-- `reset_active_memory`: Resets the active memory to an empty dictionary.
+- `browser_urls`: A list of URLs that the assistant can open in the browser.
+- `browser_command`: The command used to open the browser.
+- `ai_assistant_name`: The name of the AI assistant.
+- `human_name`: The name of the human user.
+- `sql_dialect`: The SQL dialect to use for database operations. Supported options are:
+  - `sqlite`: For SQLite databases
+  - `postgres`: For PostgreSQL databases (untested)
+  - `duckdb`: For DuckDB databases
+- `system_message_suffix`: A string that will be appended to the end of the system instructions for the AI assistant.
 
-### Information Sourcing
-- `scrap_to_file_from_clipboard`: Gets a URL from the clipboard, scrapes its content, and saves it to a file in the scratch_pad_dir. Requires a [firecrawl](https://www.firecrawl.dev/) `FIRECRAWL_API_KEY` environment variable.
+Example `personalization.json`:
+
+```json
+{
+  "browser_urls": [
+    "https://chat.openai.com",
+    "https://github.com",
+    "https://stackoverflow.com"
+  ],
+  "browser_command": "open -a 'Google Chrome'",
+  "ai_assistant_name": "Ada",
+  "human_name": "User",
+  "sql_dialect": "sqlite",
+  "system_message_suffix": "Always be helpful and concise in your responses."
+}
+```
+
+The `system_message_suffix` allows you to add custom instructions or personality traits to your AI assistant. This suffix will be appended to the end of the default system instructions, giving you more control over how the assistant behaves and responds.
 
 ## Try This
 
@@ -61,6 +73,7 @@ Here are some voice commands you can try with the assistant:
 - "Hey Ada, generate a diagram outlining the architecture of a minimal tiktok clone."
 - "Hey Ada, check if `example.py` is runnable."
 - "Hey Ada, run `example.py`."
+- "Hey Ada, load the tables into memory.|Ada ingest active memory.|Ada select all Users"
 
 ### CLI Text Prompts
 You can also pass text prompts to the assistant via the CLI.
@@ -82,6 +95,7 @@ Use '|' to separate prompts to chain commands.
 - `uv run main --prompts "Generate a diagram outlining the architecture of a minimal tiktok clone"`
 - `uv run main --prompts "Check if example.py is runnable code"`
 - `uv run main --prompts "Run example.py"`
+- `uv run main --prompts "Hey Ada, load the tables into memory|Ada ingest active memory|Ada execute sql select all Users and save to csv file"`
 
 ## Code Breakdown
 
@@ -91,14 +105,20 @@ The codebase is organized within the `src/realtime_api_async_python` directory. 
 ### Important Files and Directories
 - **`main.py`**: This is the entry point of the application. It sets up the WebSocket connection, handles audio input/output, and manages the interaction between the user and the AI assistant.
 - **`modules/` Directory**: Contains various modules handling different functionalities of the assistant:
-  - `audio.py`: Handles audio playback.
-  - `async_microphone.py`: Manages asynchronous audio input.
-  - `llm.py`: Interfaces with language models.
-  - `tools.py`: Contains definitions of tools that the assistant can use.
-  - `utils.py`: Provides utility functions used across the application.
-  - `memory_management.py`: Manages the assistant's memory.
-- **`tests/` Directory**: Contains minimal tests for the application's modules.
+  - `audio.py`: Handles audio playback, including adding silence padding to prevent audio clipping.
+  - `async_microphone.py`: Manages asynchronous audio input from the microphone.
+  - `database.py`: Provides database interfaces for different SQL dialects (e.g., SQLite, DuckDB, PostgreSQL) and executes SQL queries.
+  - `llm.py`: Interfaces with language models, including functions for structured output parsing and chat prompts.
+  - `logging.py`: Configures logging for the application using Rich for formatted and colorful logs.
+  - `memory_management.py`: Manages the assistant's memory with operations to create, read, update, and delete memory entries.
+  - `mermaid.py`: Generates Mermaid diagrams based on prompts and renders them as images.
+  - `tools.py`: Contains definitions of tools and functions that the assistant can use to perform various actions.
+  - `utils.py`: Provides utility functions used across the application, such as timing decorators, model enumerations, audio configurations, and helper methods.
+- **`tests/` Directory**: Contains tests for the application's modules, providing a starting point for testing the application's components.
 - **`active_memory.json`**: Stores the assistant's active memory state, allowing it to persist information between interactions.
+- **`personalization.json`**: Contains configuration settings used to personalize the assistant's behavior.
+- **`db/` Directory**: Holds mock database files and SQL scripts for testing database functionalities.
+- **`scratchpad/` Directory**: Used for temporary file storage and manipulation by the assistant.
 
 ### Memory Management
 The assistant uses the `MemoryManager` class in `memory_management.py` to handle memory operations. This class provides methods to create, read, update, delete, and list memory entries. Memory is stored persistently in `active_memory.json`, enabling the assistant to access and manipulate memory across sessions.
@@ -115,10 +135,15 @@ Tools are functions defined in `modules/tools.py` that extend the assistant's ca
 - Let tools run in parallel.
 - Fix audio randomly cutting out near the end.
 
+## Mock Database (sqlite and duckdb)
+- Reset duckdb `rm db/mock_duck.duckdb && duckdb db/mock_duck.duckdb < db/mock_data_for_duckdb.sql`
+- Reset sqlite `rm db/mock_sqlite.db && sqlite3 db/mock_sqlite.db < db/mock_data_for_sqlite.sql`
+
 ## Resources
-- https://www.firecrawl.dev/
+- https://youtu.be/4SnvMieJiuw
 - https://youtu.be/vN0t-kcPOXo
 - https://youtu.be/090oR--s__8
+- https://www.firecrawl.dev/
 - https://openai.com/index/introducing-the-realtime-api/
 - https://openai.com/index/introducing-structured-outputs-in-the-api/
 - https://platform.openai.com/docs/guides/realtime/events
@@ -127,3 +152,6 @@ Tools are functions defined in `modules/tools.py` that extend the assistant's ca
 - https://github.com/Azure-Samples/aoai-realtime-audio-sdk/blob/main/README.md
 - https://docs.astral.sh/uv/
 - https://docs.astral.sh/uv/guides/scripts/#running-a-script-with-dependencies
+- https://duckdb.org/docs/api/python/overview.html
+- https://websockets.readthedocs.io/en/stable/index.html
+- https://docs.python.org/3/library/sqlite3.html
